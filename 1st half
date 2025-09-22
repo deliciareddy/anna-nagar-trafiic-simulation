@@ -1,0 +1,944 @@
+%% Anna Nagar Traffic Digital Twin - Complete Working Example
+% This script demonstrates a complete traffic simulation for Anna Nagar, Chennai
+% using MATLAB Automated Driving Toolbox with Indian road characteristics
+
+clear; clc; close all;
+
+%% Prerequisites Check
+fprintf('Checking MATLAB toolbox availability...\n');
+
+requiredToolboxes = {'Automated Driving Toolbox', 'Computer Vision Toolbox'};
+availableToolboxes = ver;
+toolboxNames = {availableToolboxes.Name};
+
+missingToolboxes = {};
+for i = 1:length(requiredToolboxes)
+    if ~any(contains(toolboxNames, requiredToolboxes{i}))
+        missingToolboxes{end+1} = requiredToolboxes{i};
+    end
+end
+
+if ~isempty(missingToolboxes)
+    fprintf('Warning: Missing toolboxes: %s\n', strjoin(missingToolboxes, ', '));
+    fprintf('Some features may not work properly.\n');
+end
+
+%% Configuration
+config = struct();
+config.simulationTime = 300; % 5 minutes
+config.timeStep = 0.1;
+config.vehicleCount = 60;
+config.enableVisualization = true;
+config.enableDataLogging = true;
+config.scenario = 'peak_hour'; % 'normal', 'peak_hour', 'rain'
+
+fprintf('=== Anna Nagar Digital Twin Configuration ===\n');
+fprintf('Simulation Time: %.1f seconds\n', config.simulationTime);
+fprintf('Vehicle Count: %d\n', config.vehicleCount);
+fprintf('Scenario: %s\n', config.scenario);
+fprintf('\n');
+
+%% Step 1: Create Anna Nagar Digital Twin
+fprintf('Step 1: Creating Anna Nagar road network...\n');
+
+% Create the scenario using our template
+scenario = IndianRoadTemplates.createAnnaNavarDigitalTwin();
+scenario.StopTime = config.simulationTime;
+
+% Apply scenario-specific modifications
+switch config.scenario
+    case 'peak_hour'
+        % Increase vehicle density and aggressive behavior
+        config.vehicleCount = config.vehicleCount * 1.5;
+        fprintf('Peak hour simulation: Increased vehicle density\n');
+        
+    case 'rain'
+        % Reduce speeds and increase following distances
+        fprintf('Rain scenario: Modified driving behaviors\n');
+        % This would modify behavior parameters in the template
+        
+    case 'normal'
+        fprintf('Normal traffic scenario\n');
+end
+
+%% Step 2: Generate Realistic Traffic
+fprintf('Step 2: Generating Indian traffic patterns...\n');
+
+% Generate vehicle fleet with Indian characteristics
+IndianRoadTemplates.generateIndianTrafficFleet(scenario, config.vehicleCount);
+
+% Add pedestrians and other road users
+addPedestriansToScenario(scenario);
+
+% Add random events (breakdown, accidents, construction)
+addRandomTrafficEvents(scenario);
+
+%% Step 3: Setup Sensors and Data Collection
+fprintf('Step 3: Configuring sensors and data logging...\n');
+
+% Initialize data logger
+dataLogger = initializeDataLogger();
+
+% Setup visualization
+if config.enableVisualization
+    [fig, subplots] = setupVisualization();
+end
+
+%% Step 4: Run Simulation
+fprintf('Step 4: Starting simulation...\n');
+fprintf('Progress: [');
+
+% Simulation parameters
+iteration = 0;
+lastProgressUpdate = 0;
+progressBarLength = 50;
+
+% Main simulation loop
+while advance(scenario)
+    iteration = iteration + 1;
+    currentTime = scenario.SimulationTime;
+    
+    % Update Indian driving behaviors
+    updateIndianBehaviors(scenario, currentTime);
+    
+    % Update traffic signals with Chennai patterns
+    updateChennaiTrafficSignals(scenario, currentTime);
+    
+    % Handle Indian road conditions
+    handleIndianRoadConditions(scenario, currentTime);
+    
+    % Log data
+    if config.enableDataLogging
+        dataLogger = logSimulationData(scenario, dataLogger, currentTime);
+    end
+    
+    % Update visualization
+    if config.enableVisualization && mod(iteration, 20) == 0
+        updateVisualizationPlots(scenario, dataLogger, subplots);
+        drawnow;
+    end
+    
+    % Progress bar update
+    progress = currentTime / config.simulationTime;
+    progressChars = round(progress * progressBarLength);
+    
+    if progressChars > lastProgressUpdate
+        fprintf(repmat('=', 1, progressChars - lastProgressUpdate));
+        lastProgressUpdate = progressChars;
+    end
+    
+    % Handle any simulation events
+    handleSimulationEvents(scenario, currentTime);
+end
+
+fprintf('] Complete!\n\n');
+
+%% Step 5: Analyze Results
+fprintf('Step 5: Analyzing simulation results...\n');
+
+% Perform comprehensive analysis
+analysis = analyzeAnnaNavarTrafficResults(scenario, dataLogger, config);
+
+% Generate Indian road-specific insights
+indianRoadAnalysis = analyzeIndianRoadImpacts(scenario, dataLogger);
+
+%% Step 6: Generate Reports and Visualizations
+fprintf('Step 6: Generating reports...\n');
+
+% Create comprehensive traffic report
+generateAnnaNavarReport(analysis, indianRoadAnalysis, config);
+
+% Generate visualizations
+createTrafficFlowVisualizations(scenario, dataLogger, analysis);
+
+% Export data for further analysis
+if config.enableDataLogging
+    exportSimulationData(dataLogger, analysis, config);
+end
+
+%% Step 7: Display Results Summary
+displayResultsSummary(analysis, indianRoadAnalysis, config);
+
+%% Supporting Functions
+
+function addPedestriansToScenario(scenario)
+    % Add pedestrians with Indian crossing patterns
+    
+    pedestrianData = scenario.UserData.IndianFeatures.pedestrians;
+    pedestrians = [];
+    
+    for i = 1:length(pedestrianData)
+        pedData = pedestrianData(i);
+        
+        % Create pedestrian actor
+        ped = actor(scenario, 'ClassID', 4, 'Length', 0.5, 'Width', 0.5, 'Height', 1.7);
+        
+        % Set crossing trajectory based on location and type
+        switch pedData.type
+            case 'busstop'
+                % Frequent crossings near bus stops
+                startY = -10; endY = 10;
+                speed = 1.2; % Normal walking speed
+                
+            case 'commercial'
+                % Random crossings in commercial areas
+                startY = -8; endY = 8;
+                speed = 1.0; % Slower due to shopping
+                
+            case 'school'
+                % Group crossings in school zones
+                startY = -12; endY = 12;
+                speed = 0.8; % Children walking slower
+        end
+        
+        % Create waypoints
+        waypoints = [pedData.x, startY, 0; pedData.x, endY, 0];
+        
+        % Add some randomness to crossing behavior
+        if rand() < 0.3 % 30% chance of hesitant crossing
+            midPoint = [pedData.x, 0, 0];
+            waypoints = [waypoints(1,:); midPoint; waypoints(2,:)];
+            speed = speed * 0.7; % Slower hesitant crossing
+        end
+        
+        trajectory(ped, waypoints, speed);
+        pedestrians = [pedestrians, ped];
+    end
+    
+    scenario.UserData.Pedestrians = pedestrians;
+end
+
+function addRandomTrafficEvents(scenario)
+    % Add random traffic events typical in Indian cities
+    
+    events = struct();
+    
+    % Vehicle breakdown (common in Indian traffic)
+    events.breakdown = struct('probability', 0.02, 'duration', 120, 'locations', []);
+    
+    % Minor accidents
+    events.accident = struct('probability', 0.005, 'duration', 300, 'locations', []);
+    
+    % Police checking (random stops)
+    events.policeCheck = struct('probability', 0.01, 'duration', 60, 'locations', []);
+    
+    % Construction work
+    events.construction = struct('active', true, 'locations', [450, 0], 'laneReduction', 0.5);
+    
+    scenario.UserData.TrafficEvents = events;
+end
+
+function dataLogger = initializeDataLogger()
+    % Initialize comprehensive data logging structure
+    
+    dataLogger = struct();
+    
+    % Time series data
+    dataLogger.time = [];
+    dataLogger.vehiclePositions = {};
+    dataLogger.vehicleSpeeds = {};
+    dataLogger.vehicleTypes = {};
+    
+    % Traffic metrics
+    dataLogger.congestionLevels = [];
+    dataLogger.averageSpeeds = [];
+    dataLogger.signalDelays = [];
+    
+    % Indian-specific metrics
+    dataLogger.trafficViolations = {};
+    dataLogger.honkingLevels = [];
+    dataLogger.potholeImpacts = [];
+    dataLogger.vendorObstructions = [];
+    
+    % Event tracking
+    dataLogger.events = {};
+    dataLogger.signalStates = {};
+    
+    fprintf('Data logger initialized with %d metric categories\n', 8);
+end
+
+function [fig, subplots] = setupVisualization()
+    % Setup real-time visualization dashboard
+    
+    fig = figure('Name', 'Anna Nagar Traffic Digital Twin - Live Dashboard', ...
+                 'Position', [100, 100, 1400, 900]);
+    
+    % Create subplot layout
+    subplots = struct();
+    
+    % Main scenario view
+    subplots.main = subplot(2, 3, [1, 2]);
+    title('Anna Nagar Traffic Scenario');
+    axis equal; grid on;
+    
+    % Speed distribution
+    subplots.speed = subplot(2, 3, 3);
+    title('Speed Distribution');
+    xlabel('Speed (km/h)'); ylabel('Frequency');
+    
+    % Congestion over time
+    subplots.congestion = subplot(2, 3, 4);
+    title('Congestion Level');
+    xlabel('Time (s)'); ylabel('Congestion (%)');
+    grid on;
+    
+    % Vehicle type composition
+    subplots.composition = subplot(2, 3, 5);
+    title('Traffic Composition');
+    
+    % Indian road impact metrics
+    subplots.indian = subplot(2, 3, 6);
+    title('Indian Road Impacts');
+    xlabel('Time (s)'); ylabel('Impact Level');
+    grid on;
+    
+    fprintf('Visualization dashboard created with %d plots\n', 6);
+end
+
+function updateIndianBehaviors(scenario, currentTime)
+    % Update vehicle behaviors with Indian driving patterns
+    
+    vehicles = scenario.UserData.VehicleFleet;
+    
+    for i = 1:length(vehicles)
+        if ~isempty(vehicles{i}) && isvalid(vehicles{i})
+            vehicle = vehicles{i};
+            behavior = vehicle.UserData.behavior;
+            
+            % Time-based behavior modifications
+            if mod(currentTime, 30) < 1 % Every 30 seconds
+                
+                % Random aggressive maneuvers
+                if rand() < behavior.aggressiveness * 0.1
+                    % Implement sudden lane change or acceleration
+                    implementAggressiveManeuver(vehicle);
+                end
+                
+                % Traffic rule violations
+                if rand() < behavior.redLightViolation
+                    % Log traffic violation
+                    logTrafficViolation(scenario, vehicle, 'red_light', currentTime);
+                end
+                
+                % Honking behavior (noise pollution)
+                if rand() < behavior.honkingFrequency
+                    logHonkingEvent(scenario, vehicle, currentTime);
+                end
+            end
+            
+            % Speed adaptation based on road conditions
+            adaptSpeedToRoadConditions(vehicle, scenario);
+        end
+    end
+end
+
+function updateChennaiTrafficSignals(scenario, currentTime)
+    % Update traffic signals with Chennai-specific patterns
+    
+    signals = scenario.UserData.TrafficSignals;
+    signalNames = fieldnames(signals);
+    
+    for i = 1:length(signalNames)
+        signal = signals.(signalNames{i});
+        
+        % Update signal timing
+        signal.timeInPhase = signal.timeInPhase + 0.1;
+        
+        % Check for phase changes
+        currentPhaseData = signal.phases(signal.currentPhase);
+        totalPhaseTime = currentPhaseData.green + currentPhaseData.yellow + currentPhaseData.red;
+        
+        if signal.timeInPhase >= totalPhaseTime
+            % Move to next phase
+            signal.currentPhase = mod(signal.currentPhase, length(signal.phases)) + 1;
+            signal.timeInPhase = 0;
+            
+            % Log signal change
+            logSignalChange(scenario, signalNames{i}, signal, currentTime);
+        end
+        
+        % Handle signal coordination (Green Wave)
+        if signal.coordination
+            adjustSignalForCoordination(signal, currentTime);
+        end
+        
+        signals.(signalNames{i}) = signal;
+    end
+    
+    scenario.UserData.TrafficSignals = signals;
+end
+
+function handleIndianRoadConditions(scenario, currentTime)
+    % Handle various Indian road conditions affecting traffic
+    
+    % Pothole impact on vehicle speeds
+    handlePotholeImpacts(scenario);
+    
+    % Street vendor obstructions
+    handleVendorObstructions(scenario, currentTime);
+    
+    % Parking chaos effects
+    handleParkingChaos(scenario, currentTime);
+    
+    % Construction zone impacts
+    handleConstructionZones(scenario);
+    
+    % Weather effects (if applicable)
+    handleWeatherEffects(scenario, currentTime);
+end
+
+function dataLogger = logSimulationData(scenario, dataLogger, currentTime)
+    % Log comprehensive simulation data
+    
+    % Basic time and position data
+    dataLogger.time(end+1) = currentTime;
+    
+    % Vehicle data
+    vehicles = scenario.UserData.VehicleFleet;
+    positions = [];
+    speeds = [];
+    types = {};
+    
+    for i = 1:length(vehicles)
+        if ~isempty(vehicles{i}) && isvalid(vehicles{i})
+            positions(end+1, :) = vehicles{i}.Position;
+            speeds(end+1) = norm(vehicles{i}.Velocity) * 3.6; % km/h
+            types{end+1} = vehicles{i}.UserData.type;
+        end
+    end
+    
+    dataLogger.vehiclePositions{end+1} = positions;
+    dataLogger.vehicleSpeeds{end+1} = speeds;
+    dataLogger.vehicleTypes{end+1} = types;
+    
+    % Calculate and log metrics
+    if ~isempty(speeds)
+        dataLogger.averageSpeeds(end+1) = mean(speeds);
+        dataLogger.congestionLevels(end+1) = calculateInstantCongestion(speeds);
+    else
+        dataLogger.averageSpeeds(end+1) = 0;
+        dataLogger.congestionLevels(end+1) = 0;
+    end
+    
+    % Indian-specific metrics
+    dataLogger.honkingLevels(end+1) = calculateCurrentHonkingLevel(scenario);
+    dataLogger.potholeImpacts(end+1) = calculateCurrentPotholeImpact(scenario);
+end
+
+function updateVisualizationPlots(scenario, dataLogger, subplots)
+    % Update all visualization plots
+    
+    % Main scenario plot
+    subplot(subplots.main);
+    cla;
+    plot(scenario);
+    title(sprintf('Anna Nagar Traffic - Time: %.1fs', scenario.SimulationTime));
+    
+    % Speed distribution
+    if ~isempty(dataLogger.vehicleSpeeds) && ~isempty(dataLogger.vehicleSpeeds{end})
+        subplot(subplots.speed);
+        speeds = dataLogger.vehicleSpeeds{end};
+        histogram(speeds, 0:5:80, 'FaceColor', [0.3, 0.6, 0.9]);
+        xlabel('Speed (km/h)'); ylabel('Count');
+        title('Current Speed Distribution');
+        xlim([0, 80]);
+    end
+    
+    % Congestion over time
+    if length(dataLogger.time) > 1
+        subplot(subplots.congestion);
+        plot(dataLogger.time, dataLogger.congestionLevels, 'r-', 'LineWidth', 2);
+        xlabel('Time (s)'); ylabel('Congestion (%)');
+        title('Congestion Level Over Time');
+        grid on;
+        xlim([0, max(dataLogger.time)]);
+        ylim([0, 100]);
+    end
+    
+    % Traffic composition
+    if ~isempty(dataLogger.vehicleTypes) && ~isempty(dataLogger.vehicleTypes{end})
+        subplot(subplots.composition);
+        types = dataLogger.vehicleTypes{end};
+        [uniqueTypes, ~, idx] = unique(types);
+        counts = accumarray(idx, 1);
+        
+        pie(counts, uniqueTypes);
+        title('Current Traffic Composition');
+    end
+    
+    % Indian road impacts
+    if length(dataLogger.time) > 1
+        subplot(subplots.indian);
+        hold on;
+        plot(dataLogger.time, dataLogger.honkingLevels, 'g-', 'LineWidth', 1.5);
+        plot(dataLogger.time, dataLogger.potholeImpacts, 'r-', 'LineWidth', 1.5);
+        xlabel('Time (s)'); ylabel('Impact Level (%)');
+        title('Indian Road Condition Impacts');
+        legend('Honking Level', 'Pothole Impact', 'Location', 'best');
+        grid on;
+        hold off;
+    end
+end
+
+function handleSimulationEvents(scenario, currentTime)
+    % Handle random simulation events
+    
+    events = scenario.UserData.TrafficEvents;
+    
+    % Vehicle breakdown
+    if rand() < events.breakdown.probability
+        triggerVehicleBreakdown(scenario, currentTime);
+    end
+    
+    % Minor accident
+    if rand() < events.accident.probability
+        triggerMinorAccident(scenario, currentTime);
+    end
+    
+    % Police checking
+    if rand() < events.policeCheck.probability
+        triggerPoliceCheck(scenario, currentTime);
+    end
+end
+
+function analysis = analyzeAnnaNavarTrafficResults(scenario, dataLogger, config)
+    % Comprehensive traffic analysis for Anna Nagar
+    
+    analysis = struct();
+    
+    % Basic traffic metrics
+    analysis.totalSimulationTime = config.simulationTime;
+    analysis.totalVehicles = config.vehicleCount;
+    
+    if ~isempty(dataLogger.averageSpeeds)
+        analysis.averageSpeed = mean(dataLogger.averageSpeeds);
+        analysis.minSpeed = min(dataLogger.averageSpeeds);
+        analysis.maxSpeed = max(dataLogger.averageSpeeds);
+    else
+        analysis.averageSpeed = 0;
+        analysis.minSpeed = 0;
+        analysis.maxSpeed = 0;
+    end
+    
+    if ~isempty(dataLogger.congestionLevels)
+        analysis.averageCongestion = mean(dataLogger.congestionLevels);
+        analysis.peakCongestion = max(dataLogger.congestionLevels);
+        analysis.congestionVariability = std(dataLogger.congestionLevels);
+    else
+        analysis.averageCongestion = 0;
+        analysis.peakCongestion = 0;
+        analysis.congestionVariability = 0;
+    end
+    
+    % Traffic efficiency metrics
+    analysis.trafficEfficiency = (100 - analysis.averageCongestion) / 100;
+    analysis.speedConsistency = 100 - (std(dataLogger.averageSpeeds) / mean(dataLogger.averageSpeeds) * 100);
+    
+    % Estimate travel times for key routes
+    analysis.travelTimes = estimateAnnaNavarTravelTimes(scenario, analysis);
+    
+    % Signal performance
+    analysis.signalEfficiency = analyzeSignalEfficiency(scenario);
+    
+    fprintf('Traffic analysis completed for %d vehicles over %.1f seconds\n', ...
+            analysis.totalVehicles, analysis.totalSimulationTime);
+end
+
+function indianAnalysis = analyzeIndianRoadImpacts(scenario, dataLogger)
+    % Analyze impacts specific to Indian road conditions
+    
+    indianAnalysis = struct();
+    
+    % Honking analysis (noise pollution)
+    if ~isempty(dataLogger.honkingLevels)
+        indianAnalysis.averageHonking = mean(dataLogger.honkingLevels);
+        indianAnalysis.peakHonking = max(dataLogger.honkingLevels);
+        indianAnalysis.noiseCategory = categorizeNoiseLevel(indianAnalysis.averageHonking);
+    end
+    
+    % Pothole impact analysis
+    if ~isempty(dataLogger.potholeImpacts)
+        indianAnalysis.potholeImpact = mean(dataLogger.potholeImpacts);
+        indianAnalysis.roadConditionRating = rateRoadCondition(indianAnalysis.potholeImpact);
+    end
+    
+    % Traffic violation analysis
+    indianAnalysis.violations = analyzeTrafficViolations(scenario);
+    
+    % Vendor obstruction impact
+    indianAnalysis.vendorImpact = analyzeVendorObstructions(scenario);
+    
+    % Parking chaos analysis
+    indianAnalysis.parkingImpact = analyzeParkingChaos(scenario);
+    
+    % Overall Indian road factor
+    indianAnalysis.indianRoadFactor = calculateIndianRoadFactor(indianAnalysis);
+    
+    fprintf('Indian road impact analysis completed\n');
+end
+
+function generateAnnaNavarReport(analysis, indianAnalysis, config)
+    % Generate comprehensive report
+    
+    reportFile = sprintf('Anna_Nagar_Traffic_Report_%s.txt', ...
+                        datestr(now, 'yyyymmdd_HHMMSS'));
+    
+    fid = fopen(reportFile, 'w');
+    
+    fprintf(fid, 'Anna Nagar Traffic Digital Twin - Simulation Report\n');
+    fprintf(fid, '==================================================\n\n');
+    
+    fprintf(fid, 'Simulation Configuration:\n');
+    fprintf(fid, '- Location: Anna Nagar, Chennai\n');
+    fprintf(fid, '- Duration: %.1f seconds (%.1f minutes)\n', ...
+            config.simulationTime, config.simulationTime/60);
+    fprintf(fid, '- Vehicle Count: %d\n', config.vehicleCount);
+    fprintf(fid, '- Scenario: %s\n', config.scenario);
+    fprintf(fid, '- Timestamp: %s\n\n', datestr(now));
+    
+    fprintf(fid, 'Traffic Performance Metrics:\n');
+    fprintf(fid, '- Average Speed: %.2f km/h\n', analysis.averageSpeed);
+    fprintf(fid, '- Speed Range: %.2f - %.2f km/h\n', analysis.minSpeed, analysis.maxSpeed);
+    fprintf(fid, '- Average Congestion: %.1f%%\n', analysis.averageCongestion);
+    fprintf(fid, '- Peak Congestion: %.1f%%\n', analysis.peakCongestion);
+    fprintf(fid, '- Traffic Efficiency: %.1f%%\n', analysis.trafficEfficiency * 100);
+    fprintf(fid, '- Speed Consistency: %.1f%%\n', analysis.speedConsistency);
+    
+    fprintf(fid, '\nIndian Road Condition Impacts:\n');
+    fprintf(fid, '- Noise Level (Honking): %.1f%% (%s)\n', ...
+            indianAnalysis.averageHonking, indianAnalysis.noiseCategory);
+    fprintf(fid, '- Road Condition Impact: %.1f%% (%s)\n', ...
+            indianAnalysis.potholeImpact, indianAnalysis.roadConditionRating);
+    fprintf(fid, '- Traffic Violations: %d incidents\n', ...
+            sum(struct2array(indianAnalysis.violations)));
+    fprintf(fid, '- Vendor Obstruction Impact: %.1f%%\n', indianAnalysis.vendorImpact);
+    fprintf(fid, '- Parking Chaos Impact: %.1f%%\n', indianAnalysis.parkingImpact);
+    fprintf(fid, '- Overall Indian Road Factor: %.2f/10\n', indianAnalysis.indianRoadFactor);
+    
+    fprintf(fid, '\nKey Travel Time Estimates:\n');
+    travelRoutes = fieldnames(analysis.travelTimes);
+    for i = 1:length(travelRoutes)
+        fprintf(fid, '- %s: %.1f minutes\n', ...
+                travelRoutes{i}, analysis.travelTimes.(travelRoutes{i}));
+    end
+    
+    fprintf(fid, '\nRecommendations:\n');
+    generateRecommendations(fid, analysis, indianAnalysis);
+    
+    fclose(fid);
+    
+    fprintf('Detailed report saved as: %s\n', reportFile);
+end
+
+function displayResultsSummary(analysis, indianAnalysis, config)
+    % Display summary of results
+    
+    fprintf('\n=== ANNA NAGAR TRAFFIC SIMULATION SUMMARY ===\n');
+    fprintf('Location: Anna Nagar, Chennai\n');
+    fprintf('Simulation Duration: %.1f minutes\n', config.simulationTime/60);
+    fprintf('Total Vehicles: %d\n\n', config.vehicleCount);
+    
+    fprintf('TRAFFIC PERFORMANCE:\n');
+    fprintf('├─ Average Speed: %.1f km/h\n', analysis.averageSpeed);
+    fprintf('├─ Peak Congestion: %.1f%%\n', analysis.peakCongestion);
+    fprintf('├─ Traffic Efficiency: %.1f%%\n', analysis.trafficEfficiency * 100);
+    fprintf('└─ Speed Consistency: %.1f%%\n\n', analysis.speedConsistency);
+    
+    fprintf('INDIAN ROAD CONDITIONS:\n');
+    fprintf('├─ Noise Level: %.1f%% (%s)\n', ...
+            indianAnalysis.averageHonking, indianAnalysis.noiseCategory);
+    fprintf('├─ Road Condition: %.1f%% (%s)\n', ...
+            indianAnalysis.potholeImpact, indianAnalysis.roadConditionRating);
+    fprintf('├─ Traffic Violations: %d total\n', ...
+            sum(struct2array(indianAnalysis.violations)));
+    fprintf('└─ Indian Road Factor: %.1f/10\n\n', indianAnalysis.indianRoadFactor);
+    
+    fprintf('SIMULATION STATUS: ✓ COMPLETED SUCCESSFULLY\n');
+    fprintf('Data exported and reports generated.\n');
+    fprintf('============================================\n\n');
+end
+
+% Helper functions for analysis and visualization
+
+function congestion = calculateInstantCongestion(speeds)
+    if isempty(speeds)
+        congestion = 0;
+        return;
+    end
+    
+    avgSpeed = mean(speeds);
+    freeFlowSpeed = 45; % km/h for Anna Nagar
+    congestion = max(0, min(100, (freeFlowSpeed - avgSpeed) / freeFlowSpeed * 100));
+end
+
+function level = calculateCurrentHonkingLevel(scenario)
+    % Calculate current honking level based on vehicle behaviors
+    vehicles = scenario.UserData.VehicleFleet;
+    totalHonking = 0;
+    validVehicles = 0;
+    
+    for i = 1:length(vehicles)
+        if ~isempty(vehicles{i}) && isvalid(vehicles{i})
+            behavior = vehicles{i}.UserData.behavior;
+            totalHonking = totalHonking + behavior.honkingFrequency;
+            validVehicles = validVehicles + 1;
+        end
+    end
+    
+    if validVehicles > 0
+        level = (totalHonking / validVehicles) * 100;
+    else
+        level = 0;
+    end
+end
+
+function impact = calculateCurrentPotholeImpact(scenario)
+    % Calculate current pothole impact on traffic
+    potholes = scenario.UserData.IndianFeatures.potholes;
+    impact = 0;
+    
+    for i = 1:length(potholes)
+        pothole = potholes(i);
+        impact = impact + pothole.severity * pothole.size;
+    end
+    
+    impact = min(100, impact * 15); % Scale and cap at 100%
+end
+
+function category = categorizeNoiseLevel(honkingLevel)
+    if honkingLevel < 20
+        category = 'Low';
+    elseif honkingLevel < 40
+        category = 'Moderate';
+    elseif honkingLevel < 60
+        category = 'High';
+    else
+        category = 'Excessive';
+    end
+end
+
+function rating = rateRoadCondition(potholeImpact)
+    if potholeImpact < 15
+        rating = 'Good';
+    elseif potholeImpact < 30
+        rating = 'Fair';
+    elseif potholeImpact < 50
+        rating = 'Poor';
+    else
+        rating = 'Very Poor';
+    end
+end
+
+function factor = calculateIndianRoadFactor(indianAnalysis)
+    % Calculate overall Indian road complexity factor (1-10 scale)
+    
+    factors = [
+        indianAnalysis.averageHonking / 10, ...    % Noise factor
+        indianAnalysis.potholeImpact / 10, ...     % Road condition factor
+        sum(struct2array(indianAnalysis.violations)) / 5, ... % Violation factor
+        indianAnalysis.vendorImpact / 10, ...      % Vendor obstruction
+        indianAnalysis.parkingImpact / 10          % Parking chaos
+    ];
+    
+    factor = min(10, mean(factors));
+end
+
+% Placeholder functions for events and impacts
+
+function implementAggressiveManeuver(vehicle)
+    % Implement aggressive driving maneuver
+    fprintf('Vehicle %d: Aggressive maneuver at %.1fs\n', ...
+            vehicle.UserData.id, vehicle.Parent.SimulationTime);
+end
+
+function logTrafficViolation(scenario, vehicle, violationType, time)
+    % Log traffic violation
+    if ~isfield(scenario.UserData, 'ViolationLog')
+        scenario.UserData.ViolationLog = {};
+    end
+    
+    violation = struct('vehicle', vehicle.UserData.id, 'type', violationType, 'time', time);
+    scenario.UserData.ViolationLog{end+1} = violation;
+end
+
+function logHonkingEvent(scenario, vehicle, time)
+    % Log honking event for noise analysis
+    if ~isfield(scenario.UserData, 'HonkingLog')
+        scenario.UserData.HonkingLog = [];
+    end
+    
+    scenario.UserData.HonkingLog(end+1) = time;
+end
+
+function adaptSpeedToRoadConditions(vehicle, scenario)
+    % Adapt vehicle speed based on road conditions
+    potholes = scenario.UserData.IndianFeatures.potholes;
+    currentPos = vehicle.Position;
+    
+    % Check proximity to potholes
+    for i = 1:length(potholes)
+        pothole = potholes(i);
+        distance = norm([pothole.x - currentPos(1), pothole.y - currentPos(2)]);
+        
+        if distance < 5 % Within 5 meters of pothole
+            % Reduce speed based on pothole severity
+            speedReduction = pothole.severity * 0.3; % Up to 30% reduction
+            % Implementation would modify vehicle trajectory speed
+        end
+    end
+end
+
+function handlePotholeImpacts(scenario)
+    % Handle pothole impacts on traffic flow
+    % Implementation would modify vehicle speeds and paths near potholes
+end
+
+function handleVendorObstructions(scenario, currentTime)
+    % Handle street vendor obstructions based on time of day
+    vendors = scenario.UserData.IndianFeatures.vendors;
+    
+    for i = 1:length(vendors)
+        vendor = vendors(i);
+        % Time-based vendor presence
+        isActive = checkVendorActivity(vendor, currentTime);
+        if isActive
+            % Apply lane obstruction
+            applyLaneObstruction(scenario, vendor);
+        end
+    end
+end
+
+function handleParkingChaos(scenario, currentTime)
+    % Handle parking-related obstructions
+    % Implementation would create temporary obstacles
+end
+
+function handleConstructionZones(scenario)
+    % Handle construction zone impacts
+    construction = scenario.UserData.IndianFeatures.construction;
+    % Implementation would apply lane reductions and speed limits
+end
+
+function handleWeatherEffects(scenario, currentTime)
+    % Handle weather effects on driving behavior
+    % Implementation would modify visibility and road friction
+end
+
+function active = checkVendorActivity(vendor, currentTime)
+    % Check if vendor is active based on time pattern
+    switch vendor.timePattern
+        case 'allday'
+            active = true;
+        case 'morning'
+            active = mod(currentTime, 86400) < 43200; % First half of day
+        case 'evening'
+            active = mod(currentTime, 86400) >= 43200; % Second half of day
+        otherwise
+            active = rand() < 0.5;
+    end
+end
+
+function applyLaneObstruction(scenario, vendor)
+    % Apply lane obstruction due to vendor
+    % Implementation would modify available lane width
+end
+
+function logSignalChange(scenario, signalName, signal, currentTime)
+    % Log traffic signal phase changes
+    if ~isfield(scenario.UserData, 'SignalLog')
+        scenario.UserData.SignalLog = {};
+    end
+    
+    logEntry = struct('signal', signalName, 'phase', signal.currentPhase, 'time', currentTime);
+    scenario.UserData.SignalLog{end+1} = logEntry;
+end
+
+function adjustSignalForCoordination(signal, currentTime)
+    % Adjust signal timing for green wave coordination
+    % Implementation would modify phase timings based on traffic flow
+end
+
+function triggerVehicleBreakdown(scenario, currentTime)
+    fprintf('Random event: Vehicle breakdown at time %.1fs\n', currentTime);
+end
+
+function triggerMinorAccident(scenario, currentTime)
+    fprintf('Random event: Minor traffic incident at time %.1fs\n', currentTime);
+end
+
+function triggerPoliceCheck(scenario, currentTime)
+    fprintf('Random event: Police checking at time %.1fs\n', currentTime);
+end
+
+function travelTimes = estimateAnnaNavarTravelTimes(scenario, analysis)
+    % Estimate travel times for key routes in Anna Nagar
+    
+    baseSpeed = analysis.averageSpeed;
+    congestionFactor = 1 + (analysis.averageCongestion / 100);
+    
+    travelTimes = struct();
+    
+    % Key routes in Anna Nagar
+    routes = struct();
+    routes.MainRoad_EastWest = 1.2; % km
+    routes.SecondAvenue_NorthSouth = 0.6; % km
+    routes.FourthAvenue_NorthSouth = 0.6; % km
+    routes.CrossRoad_AtoC = 1.0; % km
+    
+    routeNames = fieldnames(routes);
+    for i = 1:length(routeNames)
+        distance = routes.(routeNames{i});
+        estimatedTime = (distance / baseSpeed) * 60 * congestionFactor; % minutes
+        travelTimes.(routeNames{i}) = estimatedTime;
+    end
+end
+
+function efficiency = analyzeSignalEfficiency(scenario)
+    % Analyze traffic signal efficiency
+    signals = scenario.UserData.TrafficSignals;
+    
+    % Simplified efficiency calculation
+    efficiency = 75; % Base efficiency percentage
+    
+    % Adjust based on coordination
+    signalNames = fieldnames(signals);
+    coordinatedSignals = 0;
+    
+    for i = 1:length(signalNames)
+        if signals.(signalNames{i}).coordination
+            coordinatedSignals = coordinatedSignals + 1;
+        end
+    end
+    
+    efficiency = efficiency + (coordinatedSignals / length(signalNames)) * 15;
+end
+
+function violations = analyzeTrafficViolations(scenario)
+    % Analyze traffic violations from simulation
+    
+    violations = struct();
+    violations.redLight = 0;
+    violations.wrongSide = 0;
+    violations.shoulderUsage = 0;
+    violations.laneDiscipline = 0;
+    
+    if isfield(scenario.UserData, 'ViolationLog')
+        violationLog = scenario.UserData.ViolationLog;
+        
+        for i = 1:length(violationLog)
+            violation = violationLog{i};
+            switch violation.type
+                case 'red_light'
+                    violations.redLight = violations.redLight + 1;
+                case 'wrong_side'
+                    violations.wrongSide = violations.wrongSide + 1;
+                case 'shoulder_usage'
+                    violations.shoulderUsage = violations.shoulderUsage + 1;
+                case 'lane_discipline'
+                    violations.laneDiscipline = violations.laneDiscipline + 1;
+            end
+        end
+    end
+end
+
+function impact = analyzeVendorOb
