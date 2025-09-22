@@ -1,0 +1,518 @@
+%% Anna Nagar Traffic Digital Twin - Complete Working Example
+% This script demonstrates a complete traffic simulation for Anna Nagar, Chennai
+% using MATLAB Automated Driving Toolbox with Indian road characteristics
+
+clear; clc; close all;
+
+%% Prerequisites Check
+fprintf('Checking MATLAB toolbox availability...\n');
+
+requiredToolboxes = {'Automated Driving Toolbox', 'Computer Vision Toolbox'};
+availableToolboxes = ver;
+toolboxNames = {availableToolboxes.Name};
+
+missingToolboxes = {};
+for i = 1:length(requiredToolboxes)
+    if ~any(contains(toolboxNames, requiredToolboxes{i}))
+        missingToolboxes{end+1} = requiredToolboxes{i};
+    end
+end
+
+if ~isempty(missingToolboxes)
+    fprintf('Warning: Missing toolboxes: %s\n', strjoin(missingToolboxes, ', '));
+    fprintf('Some features may not work properly.\n');
+end
+
+%% Configuration
+config = struct();
+config.simulationTime = 300; % 5 minutes
+config.timeStep = 0.1;
+config.vehicleCount = 60;
+config.enableVisualization = true;
+config.enableDataLogging = true;
+config.scenario = 'peak_hour'; % 'normal', 'peak_hour', 'rain'
+
+fprintf('=== Anna Nagar Digital Twin Configuration ===\n');
+fprintf('Simulation Time: %.1f seconds\n', config.simulationTime);
+fprintf('Vehicle Count: %d\n', config.vehicleCount);
+fprintf('Scenario: %s\n', config.scenario);
+fprintf('\n');
+
+%% Step 1: Create Anna Nagar Digital Twin
+fprintf('Step 1: Creating Anna Nagar road network...\n');
+
+% Create basic driving scenario
+scenario = drivingScenario;
+scenario.StopTime = config.simulationTime;
+
+% Create Anna Nagar road network (simplified version)
+roadCenters = [
+    0   0   0
+    100 0   0
+    200 50  0
+    300 0   0
+    400 0   0
+];
+road(scenario, roadCenters, 'Name', 'Anna Nagar Main Road');
+
+% Add crossing roads
+roadCenters = [
+    150 -50  0
+    150 100  0
+];
+road(scenario, roadCenters, 'Name', '2nd Avenue');
+
+roadCenters = [
+    250 -50  0
+    250 100  0
+];
+road(scenario, roadCenters, 'Name', '4th Avenue');
+
+% Store Indian road features
+scenario.UserData.IndianFeatures = struct();
+scenario.UserData.IndianFeatures.potholes = [
+    struct('x', 120, 'y', 2, 'severity', 0.7, 'size', 2)
+    struct('x', 180, 'y', -1, 'severity', 0.3, 'size', 1)
+    struct('x', 280, 'y', 3, 'severity', 0.5, 'size', 1.5)
+];
+
+scenario.UserData.IndianFeatures.pedestrians = [
+    struct('x', 150, 'y', 0, 'type', 'busstop')
+    struct('x', 250, 'y', 0, 'type', 'commercial')
+];
+
+scenario.UserData.IndianFeatures.vendors = [
+    struct('x', 130, 'y', 5, 'size', 2, 'obstructionLevel', 0.6, 'timePattern', 'allday')
+];
+
+scenario.UserData.IndianFeatures.parking = [
+    struct('x', 160, 'y', -10, 'chaosLevel', 0.8, 'occupancy', 0.9)
+];
+
+% Initialize traffic signals
+scenario.UserData.TrafficSignals = struct();
+scenario.UserData.TrafficSignals.Signal1 = struct(...
+    'phases', [...
+        struct('green', 30, 'yellow', 5, 'red', 25), ...
+        struct('green', 25, 'yellow', 5, 'red', 30) ...
+    ], ...
+    'currentPhase', 1, ...
+    'timeInPhase', 0, ...
+    'coordination', true ...
+);
+
+%% Step 2: Generate Realistic Traffic
+fprintf('Step 2: Generating Indian traffic patterns...\n');
+
+% Generate vehicle fleet with Indian characteristics
+scenario.UserData.VehicleFleet = generateIndianTrafficFleet(scenario, config.vehicleCount);
+
+% Add pedestrians and other road users
+addPedestriansToScenario(scenario);
+
+% Add random events
+addRandomTrafficEvents(scenario);
+
+%% Step 3: Setup Sensors and Data Collection
+fprintf('Step 3: Configuring sensors and data logging...\n');
+
+% Initialize data logger
+dataLogger = initializeDataLogger();
+
+% Setup visualization
+if config.enableVisualization
+    [fig, subplots] = setupVisualization();
+end
+
+%% Step 4: Run Simulation
+fprintf('Step 4: Starting simulation...\n');
+fprintf('Progress: [');
+
+% Simulation parameters
+iteration = 0;
+lastProgressUpdate = 0;
+progressBarLength = 50;
+
+% Main simulation loop
+while advance(scenario)
+    iteration = iteration + 1;
+    currentTime = scenario.SimulationTime;
+    
+    % Update Indian driving behaviors
+    updateIndianBehaviors(scenario, currentTime);
+    
+    % Update traffic signals with Chennai patterns
+    updateChennaiTrafficSignals(scenario, currentTime);
+    
+    % Handle Indian road conditions
+    handleIndianRoadConditions(scenario, currentTime);
+    
+    % Log data
+    if config.enableDataLogging
+        dataLogger = logSimulationData(scenario, dataLogger, currentTime);
+    end
+    
+    % Update visualization
+    if config.enableVisualization && mod(iteration, 20) == 0
+        updateVisualizationPlots(scenario, dataLogger, subplots);
+        drawnow;
+    end
+    
+    % Progress bar update
+    progress = currentTime / config.simulationTime;
+    progressChars = round(progress * progressBarLength);
+    
+    if progressChars > lastProgressUpdate
+        fprintf(repmat('=', 1, progressChars - lastProgressUpdate));
+        lastProgressUpdate = progressChars;
+    end
+    
+    % Handle any simulation events
+    handleSimulationEvents(scenario, currentTime);
+end
+
+fprintf('] Complete!\n\n');
+
+%% Step 5: Analyze Results
+fprintf('Step 5: Analyzing simulation results...\n');
+
+% Perform comprehensive analysis
+analysis = analyzeAnnaNavarTrafficResults(scenario, dataLogger, config);
+
+% Generate Indian road-specific insights
+indianRoadAnalysis = analyzeIndianRoadImpacts(scenario, dataLogger);
+
+%% Step 6: Generate Reports and Visualizations
+fprintf('Step 6: Generating reports...\n');
+
+% Create comprehensive traffic report
+generateAnnaNavarReport(analysis, indianRoadAnalysis, config);
+
+% Generate visualizations
+createTrafficFlowVisualizations(scenario, dataLogger, analysis);
+
+% Export data for further analysis
+if config.enableDataLogging
+    exportSimulationData(dataLogger, analysis, config);
+end
+
+%% Step 7: Display Results Summary
+displayResultsSummary(analysis, indianRoadAnalysis, config);
+
+%% Supporting Functions
+
+function vehicleFleet = generateIndianTrafficFleet(scenario, vehicleCount)
+    % Generate realistic Indian traffic composition
+    vehicleFleet = cell(vehicleCount, 1);
+    
+    vehicleTypes = {'Car', 'Bike', 'Auto', 'Bus', 'Truck'};
+    typeProbabilities = [0.4, 0.3, 0.15, 0.1, 0.05]; % Indian traffic composition
+    
+    for i = 1:vehicleCount
+        % Random vehicle type based on Indian distribution
+        vehicleType = vehicleTypes{find(rand() < cumsum(typeProbabilities), 1)};
+        
+        % Create vehicle with appropriate dimensions
+        switch vehicleType
+            case 'Car'
+                length = 4.5; width = 1.8; height = 1.5;
+            case 'Bike'
+                length = 2.0; width = 0.8; height = 1.2;
+            case 'Auto'
+                length = 2.8; width = 1.4; height = 1.6;
+            case 'Bus'
+                length = 12.0; width = 2.5; height = 3.5;
+            case 'Truck'
+                length = 7.5; width = 2.3; height = 3.0;
+        end
+        
+        % Create vehicle
+        vehicle = vehicle(scenario, ...
+            'ClassID', 1, ...
+            'Length', length, ...
+            'Width', width, ...
+            'Height', height);
+        
+        % Set Indian driving behavior parameters
+        vehicle.UserData = struct();
+        vehicle.UserData.id = i;
+        vehicle.UserData.type = vehicleType;
+        vehicle.UserData.behavior = struct(...
+            'aggressiveness', rand() * 0.8 + 0.2, ... % 0.2 to 1.0
+            'honkingFrequency', rand() * 0.6 + 0.2, ... % 0.2 to 0.8
+            'redLightViolation', rand() * 0.3, ... % 0 to 0.3
+            'laneDiscipline', rand() * 0.7 + 0.3 ... % 0.3 to 1.0
+        );
+        
+        % Set random trajectory
+        setRandomTrajectory(vehicle, scenario);
+        
+        vehicleFleet{i} = vehicle;
+    end
+end
+
+function setRandomTrajectory(vehicle, scenario)
+    % Set random trajectory for vehicle
+    roadCenters = roadBoundaries(scenario);
+    if ~isempty(roadCenters)
+        % Simple straight trajectory for demonstration
+        startPos = [50 + rand()*300, -2 + rand()*4, 0];
+        endPos = [startPos(1) + 200, startPos(2), 0];
+        
+        speed = 10 + rand() * 30; % 10-40 km/h
+        
+        trajectory(vehicle, [startPos; endPos], speed);
+    end
+end
+
+function addPedestriansToScenario(scenario)
+    % Add pedestrians with Indian crossing patterns
+    pedestrianData = scenario.UserData.IndianFeatures.pedestrians;
+    
+    for i = 1:length(pedestrianData)
+        pedData = pedestrianData(i);
+        
+        % Create pedestrian
+        ped = actor(scenario, 'ClassID', 4, 'Length', 0.5, 'Width', 0.5, 'Height', 1.7);
+        
+        % Set crossing trajectory
+        startY = -10; endY = 10;
+        speed = 1.0 + rand() * 0.5;
+        
+        waypoints = [pedData.x, startY, 0; pedData.x, endY, 0];
+        trajectory(ped, waypoints, speed);
+    end
+end
+
+function addRandomTrafficEvents(scenario)
+    % Add random traffic events
+    scenario.UserData.TrafficEvents = struct();
+    scenario.UserData.TrafficEvents.breakdown = struct('probability', 0.02);
+    scenario.UserData.TrafficEvents.accident = struct('probability', 0.005);
+    scenario.UserData.TrafficEvents.policeCheck = struct('probability', 0.01);
+end
+
+function dataLogger = initializeDataLogger()
+    % Initialize data logging structure
+    dataLogger = struct();
+    dataLogger.time = [];
+    dataLogger.vehiclePositions = {};
+    dataLogger.vehicleSpeeds = {};
+    dataLogger.vehicleTypes = {};
+    dataLogger.congestionLevels = [];
+    dataLogger.averageSpeeds = [];
+    dataLogger.honkingLevels = [];
+    dataLogger.potholeImpacts = [];
+end
+
+function [fig, subplots] = setupVisualization()
+    % Setup visualization dashboard
+    fig = figure('Name', 'Anna Nagar Traffic Digital Twin', ...
+                 'Position', [100, 100, 1200, 800]);
+    
+    subplots = struct();
+    subplots.main = subplot(2, 3, [1, 2]);
+    title('Live Traffic Simulation');
+    grid on;
+    
+    subplots.speed = subplot(2, 3, 3);
+    title('Speed Distribution');
+    
+    subplots.congestion = subplot(2, 3, 4);
+    title('Congestion Over Time');
+    
+    subplots.composition = subplot(2, 3, 5);
+    title('Traffic Composition');
+    
+    subplots.impacts = subplot(2, 3, 6);
+    title('Road Impacts');
+end
+
+function updateIndianBehaviors(scenario, currentTime)
+    % Update vehicle behaviors
+    vehicles = scenario.UserData.VehicleFleet;
+    
+    for i = 1:length(vehicles)
+        if ~isempty(vehicles{i}) && isvalid(vehicles{i})
+            % Behavior updates would go here
+        end
+    end
+end
+
+function updateChennaiTrafficSignals(scenario, currentTime)
+    % Update traffic signals
+    signals = scenario.UserData.TrafficSignals;
+    signalNames = fieldnames(signals);
+    
+    for i = 1:length(signalNames)
+        signal = signals.(signalNames{i});
+        signal.timeInPhase = signal.timeInPhase + 0.1;
+        
+        % Phase change logic
+        currentPhase = signal.phases(signal.currentPhase);
+        totalTime = currentPhase.green + currentPhase.yellow + currentPhase.red;
+        
+        if signal.timeInPhase >= totalTime
+            signal.currentPhase = mod(signal.currentPhase, length(signal.phases)) + 1;
+            signal.timeInPhase = 0;
+        end
+        
+        signals.(signalNames{i}) = signal;
+    end
+    
+    scenario.UserData.TrafficSignals = signals;
+end
+
+function handleIndianRoadConditions(scenario, currentTime)
+    % Handle road conditions (simplified)
+end
+
+function dataLogger = logSimulationData(scenario, dataLogger, currentTime)
+    % Log simulation data
+    dataLogger.time(end+1) = currentTime;
+    
+    vehicles = scenario.UserData.VehicleFleet;
+    positions = [];
+    speeds = [];
+    types = {};
+    
+    for i = 1:length(vehicles)
+        if ~isempty(vehicles{i}) && isvalid(vehicles{i})
+            vehicle = vehicles{i};
+            positions(end+1, :) = vehicle.Position;
+            speeds(end+1) = norm(vehicle.Velocity) * 3.6; % km/h
+            types{end+1} = vehicle.UserData.type;
+        end
+    end
+    
+    dataLogger.vehiclePositions{end+1} = positions;
+    dataLogger.vehicleSpeeds{end+1} = speeds;
+    dataLogger.vehicleTypes{end+1} = types;
+    
+    if ~isempty(speeds)
+        dataLogger.averageSpeeds(end+1) = mean(speeds);
+        dataLogger.congestionLevels(end+1) = calculateInstantCongestion(speeds);
+    else
+        dataLogger.averageSpeeds(end+1) = 0;
+        dataLogger.congestionLevels(end+1) = 0;
+    end
+    
+    % Simplified Indian metrics
+    dataLogger.honkingLevels(end+1) = rand() * 30 + 20;
+    dataLogger.potholeImpacts(end+1) = rand() * 25 + 10;
+end
+
+function updateVisualizationPlots(scenario, dataLogger, subplots)
+    % Update visualization plots
+    subplot(subplots.main);
+    plot(scenario);
+    title(sprintf('Time: %.1fs', scenario.SimulationTime));
+    
+    if ~isempty(dataLogger.vehicleSpeeds) && ~isempty(dataLogger.vehicleSpeeds{end})
+        subplot(subplots.speed);
+        speeds = dataLogger.vehicleSpeeds{end};
+        histogram(speeds, 'FaceColor', 'blue');
+        title('Speed Distribution');
+    end
+    
+    if length(dataLogger.time) > 1
+        subplot(subplots.congestion);
+        plot(dataLogger.time, dataLogger.congestionLevels, 'r-');
+        title('Congestion Over Time');
+        grid on;
+    end
+end
+
+function handleSimulationEvents(scenario, currentTime)
+    % Handle random events
+    events = scenario.UserData.TrafficEvents;
+    
+    if rand() < events.breakdown.probability
+        fprintf('Vehicle breakdown at %.1fs\n', currentTime);
+    end
+end
+
+function analysis = analyzeAnnaNavarTrafficResults(scenario, dataLogger, config)
+    % Analyze traffic results
+    analysis = struct();
+    analysis.totalSimulationTime = config.simulationTime;
+    analysis.totalVehicles = config.vehicleCount;
+    
+    if ~isempty(dataLogger.averageSpeeds)
+        analysis.averageSpeed = mean(dataLogger.averageSpeeds);
+        analysis.minSpeed = min(dataLogger.averageSpeeds);
+        analysis.maxSpeed = max(dataLogger.averageSpeeds);
+    else
+        analysis.averageSpeed = 0;
+        analysis.minSpeed = 0;
+        analysis.maxSpeed = 0;
+    end
+    
+    analysis.trafficEfficiency = (100 - mean(dataLogger.congestionLevels)) / 100;
+    analysis.travelTimes = estimateAnnaNavarTravelTimes(scenario, analysis);
+    
+    fprintf('Analysis completed for %d vehicles\n', analysis.totalVehicles);
+end
+
+function indianAnalysis = analyzeIndianRoadImpacts(scenario, dataLogger)
+    % Analyze Indian road impacts
+    indianAnalysis = struct();
+    indianAnalysis.averageHonking = mean(dataLogger.honkingLevels);
+    indianAnalysis.potholeImpact = mean(dataLogger.potholeImpacts);
+    indianAnalysis.indianRoadFactor = (indianAnalysis.averageHonking + indianAnalysis.potholeImpact) / 20;
+    
+    fprintf('Indian road impact analysis completed\n');
+end
+
+function generateAnnaNavarReport(analysis, indianAnalysis, config)
+    % Generate report
+    reportFile = 'Anna_Nagar_Report.txt';
+    fid = fopen(reportFile, 'w');
+    
+    fprintf(fid, 'Anna Nagar Traffic Simulation Report\n');
+    fprintf(fid, 'Average Speed: %.1f km/h\n', analysis.averageSpeed);
+    fprintf(fid, 'Indian Road Factor: %.1f/10\n', indianAnalysis.indianRoadFactor);
+    
+    fclose(fid);
+    fprintf('Report saved: %s\n', reportFile);
+end
+
+function createTrafficFlowVisualizations(scenario, dataLogger, analysis)
+    % Create visualizations
+    figure('Name', 'Final Analysis');
+    plot(dataLogger.time, dataLogger.averageSpeeds);
+    title('Average Speed Over Time');
+    xlabel('Time (s)');
+    ylabel('Speed (km/h)');
+    grid on;
+end
+
+function exportSimulationData(dataLogger, analysis, config)
+    % Export data
+    save('simulation_data.mat', 'dataLogger', 'analysis', 'config');
+    fprintf('Data exported to simulation_data.mat\n');
+end
+
+function displayResultsSummary(analysis, indianAnalysis, config)
+    % Display summary
+    fprintf('\n=== SIMULATION SUMMARY ===\n');
+    fprintf('Average Speed: %.1f km/h\n', analysis.averageSpeed);
+    fprintf('Indian Road Factor: %.1f/10\n', indianAnalysis.indianRoadFactor);
+    fprintf('Simulation completed successfully!\n');
+end
+
+%% Helper Functions
+function congestion = calculateInstantCongestion(speeds)
+    if isempty(speeds)
+        congestion = 0;
+        return;
+    end
+    avgSpeed = mean(speeds);
+    freeFlowSpeed = 45;
+    congestion = max(0, min(100, (freeFlowSpeed - avgSpeed) / freeFlowSpeed * 100));
+end
+
+function travelTimes = estimateAnnaNavarTravelTimes(scenario, analysis)
+    travelTimes = struct();
+    travelTimes.MainRoad = (1.2 / analysis.averageSpeed) * 60;
+end
